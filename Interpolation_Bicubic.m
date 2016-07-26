@@ -1,6 +1,6 @@
 % Image is interpolated to a defined scale (>1) from original 381x383
 % light-field dataset
-% Sinc interpolation
+%Barycentric interpolation
 % interpolating_point(X) is calculated based on neighbor_pixels within WINDOWS, which
 % form a matrix.
 
@@ -21,7 +21,6 @@ Mid_NumberofColumnSubImage=round(NumberofColumnSubImage/2);
 
 for row= 100:501                   %3*scale:NumberOfMicroLensX*scale-3*scale            %Row number of interpolated image
     for column= 100:501           %3*scale:NumberOfMicroLensY*scale-3*scale     %Column number of interpolated image
-        %initiate kernel variable
         weigh_sum=0;
         temp=0;
         %scale-down COORDINATE of a pixel in interpolated_image back to LF
@@ -42,7 +41,7 @@ for row= 100:501                   %3*scale:NumberOfMicroLensX*scale-3*scale    
                     weigh_sum=weigh_sum+sin(pi()*distance/half_windows_size)/(pi()*distance/half_windows_size);
                     %interpolate pixel
                     temp=temp +sin(pi()*distance/half_windows_size)/(pi()*distance/half_windows_size)...
-                        .*LF(Mid_NumberofRowSubImage+pixel_r,Mid_NumberofColumnSubImage+pixel_c, r+pixel_r, c+pixel_c, 1);
+                        .*LF(Mid_NumberofColumnSubImage+pixel_c,Mid_NumberofRowSubImage+pixel_r, r+pixel_r, c+pixel_c, 1);
                 elseif or( abs(pixel_r-interpolated_pixel_r)==half_windows_size,...
                         abs(pixel_c-interpolated_pixel_c)==half_windows_size)
                     %calculate  distance
@@ -51,7 +50,7 @@ for row= 100:501                   %3*scale:NumberOfMicroLensX*scale-3*scale    
                     weigh_sum=weigh_sum+sin(pi()*distance/half_windows_size)/(pi()*distance/half_windows_size);
                     %interpolate pixel
                     temp=temp +sin(pi()*distance/half_windows_size)/(pi()*distance/half_windows_size)...
-                        .*LF(Mid_NumberofRowSubImage+pixel_r,Mid_NumberofColumnSubImage+pixel_c, r+pixel_r, c+pixel_c, 1);
+                        .*LF(Mid_NumberofColumnSubImage+pixel_c,Mid_NumberofRowSubImage+pixel_r, r+pixel_r, c+pixel_c, 1);
                  else
                     continue
                 end

@@ -1,3 +1,4 @@
 LFMatlabPathSetup;
+%LFUtilUnpackLytroArchive;
 LFUtilProcessWhiteImages;
 LFUtilDecodeLytroFolder;
