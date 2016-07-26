@@ -14,13 +14,13 @@ tic;
 scale=3;
 interpolated_image=zeros(NumberOfMicroLensY*scale,NumberOfMicroLensX*scale);
 %all neighbor pixels within a box R=half_windows_size are taken into considered
-half_windows_size=1;    
+half_windows_size=2;    
 % get central view  
 Mid_NumberofRowSubImage=round(NumberofRowSubImage/2);
 Mid_NumberofColumnSubImage=round(NumberofColumnSubImage/2);
 
-for row=2*scale:NumberOfMicroLensX*scale-2*scale            %Row number of interpolated image
-    for column=2*scale:NumberOfMicroLensY*scale-2*scale     %Column number of interpolated image
+for row= 100:201                   %3*scale:NumberOfMicroLensX*scale-3*scale            %Row number of interpolated image
+    for column= 100:201           %3*scale:NumberOfMicroLensY*scale-3*scale     %Column number of interpolated image
         weigh_sum=0;
         temp=0;
         %scale-down COORDINATE of a pixel in interpolated_image back to LF
@@ -33,18 +33,25 @@ for row=2*scale:NumberOfMicroLensX*scale-2*scale            %Row number of inter
         for pixel_r=-half_windows_size:half_windows_size
             for pixel_c=-half_windows_size:half_windows_size            
                 %if they are inside the boxs, sum up all cross-product SincWeigh*pixel_value 
-                if or ( abs(pixel_r-interpolated_pixel_r)<half_windows_size,...
-                        abs(pixel_c-interpolated_pixel_c)<half_windows_size)
+                if or( abs(pixel_r-interpolated_pixel_r)>half_windows_size,...
+                        abs(pixel_c-interpolated_pixel_c)>half_windows_size)
                     %calculate  distance
                     distance=sqrt((pixel_r-interpolated_pixel_r).^2+(pixel_c-interpolated_pixel_c).^2);
                     %sum weigh
                     weigh_sum=weigh_sum+sin(pi()*distance/half_windows_size)/(pi()*distance/half_windows_size);
                     %interpolate pixel
-                    temp=...
-                        temp...
-                        +sin(pi()*distance/half_windows_size)/(pi()*distance/half_windows_size)...
-                        *LF(Mid_NumberofColumnSubImage+pixel_c,Mid_NumberofRowSubImage+pixel_r, r+pixel_r, c+pixel_c, 1);
-                else
+                    temp=temp +sin(pi()*distance/half_windows_size)/(pi()*distance/half_windows_size)...
+                        .*LF(Mid_NumberofColumnSubImage+pixel_c,Mid_NumberofRowSubImage+pixel_r, r+pixel_r, c+pixel_c, 1);
+                elseif or( abs(pixel_r-interpolated_pixel_r)==half_windows_size,...
+                        abs(pixel_c-interpolated_pixel_c)==half_windows_size)
+                    %calculate  distance
+                    distance=sqrt((pixel_r-interpolated_pixel_r).^2+(pixel_c-interpolated_pixel_c).^2);
+                    %sum weigh
+                    weigh_sum=weigh_sum+sin(pi()*distance/half_windows_size)/(pi()*distance/half_windows_size);
+                    %interpolate pixel
+                    temp=temp +sin(pi()*distance/half_windows_size)/(pi()*distance/half_windows_size)...
+                        .*LF(Mid_NumberofColumnSubImage+pixel_c,Mid_NumberofRowSubImage+pixel_r, r+pixel_r, c+pixel_c, 1);
+                 else
                     continue
                 end
             end
@@ -57,3 +64,4 @@ toc;
 %print out interpolated image
 interpolated_image=interpolated_image/max(interpolated_image(:));
 imshow(interpolated_image,[])
+
