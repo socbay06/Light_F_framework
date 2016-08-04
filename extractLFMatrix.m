@@ -1,4 +1,0 @@
-LFMatlabPathSetup;
-%LFUtilUnpackLytroArchive;
-LFUtilProcessWhiteImages;
-LFUtilDecodeLytroFolder;
