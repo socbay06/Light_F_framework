@@ -4,7 +4,7 @@
 % interpolating_point(X) is calculated based on neighbor_pixels within WINDOWS, which
 % form a matrix.
 
-load('Cocktails__Decoded.mat', 'LF');
+load('C:\LFToolbox0.3_Samples\Images\Illum\IMG_0055__Decoded.mat', 'LF');
 % calibrate LF 
 LF=double(LF);        
 LF= LF/max(LF(:));
@@ -14,13 +14,13 @@ tic;
 scale=3;
 interpolated_image=zeros(NumberOfMicroLensY*scale,NumberOfMicroLensX*scale);
 %all neighbor pixels within a box R=half_windows_size are taken into considered
-half_windows_size=2;    
+half_windows_size=1;    
 % get central view  
 Mid_NumberofRowSubImage=round(NumberofRowSubImage/2);
 Mid_NumberofColumnSubImage=round(NumberofColumnSubImage/2);
 
-for row= 100:501                   %3*scale:NumberOfMicroLensX*scale-3*scale            %Row number of interpolated image
-    for column= 100:501           %3*scale:NumberOfMicroLensY*scale-3*scale     %Column number of interpolated image
+for row=400:875         %2*scale:NumberOfMicroLensY*scale-2*scale            %Row number of interpolated image
+    for column=550:1475  %2*scale:NumberOfMicroLensX*scale-2*scale     %Column number of interpolated image
         %initiate kernel variable
         weigh_sum=0;
         temp=0;
@@ -65,4 +65,4 @@ toc;
 %print out interpolated image
 interpolated_image=interpolated_image/max(interpolated_image(:));
 imshow(interpolated_image,[])
-
+imwrite(interpolated_image,'D:\Thesis_ light field_D\my works\Matlabcode\Results\interpolated_Sinc.jpg');
