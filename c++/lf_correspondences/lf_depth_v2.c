@@ -32,7 +32,7 @@
 #include "./misc_lib/string_lib.c"
 #include "./misc_lib/mg_trans_lib.c"
 
-#include "./horn_schunck/horn_schunck_warp_view.c"
+#include "./horn_schunck/horn_schunck_warp_view_v2.c"
 
 /*---------------------------------------------------------------------------*/
 #define MODE_MANUAL 0
@@ -47,34 +47,35 @@ char config_file[160];
 
 /*---------------------------------------------------------------------------*/
 struct variation_flow_params {
-   float g_pixel_ratio;
-	float g_max_disp;
-	float h_sigma;
-	float h_alpha;
-	float h_beta;
-	int g_type;
-	float h_omega;
-	int h_warp_levels;
-	int h_iter;
-	float h_warp_eta;
+        float g_pixel_ratio;
+        float g_max_disp;
+        float h_sigma;
+        float h_alpha;
+        float h_beta;
+        float h_lamda;
+        int g_type;
+        float h_omega;
+        int h_warp_levels;
+        int h_iter;
+        float h_warp_eta;
 } hs_param; //horn_schnuck paramater
 
 struct light_field_params {
-	//data related params.
-	float * lf;
-   size_t W;
-	size_t H;
-	size_t S;
-	size_t T;
-	size_t C;
+        //data related params.
+        float * lf;
+        size_t W;
+        size_t H;
+        size_t S;
+        size_t T;
+        size_t C;
 } lf;
 
 struct application_params {
-	int mode = MODE_MANUAL;
-	int png_out = 1;
-	int view_all = 0;
-	int view_t = -1;
-	int view_s = -1;
+        int mode = MODE_MANUAL;
+        int png_out = 1;
+        int view_all = 0;
+        int view_t = -1;
+        int view_s = -1;
 } app_param;
 
 
@@ -108,6 +109,7 @@ float * uvbuffer;       /* Buffer for writing out u/v to h5 file */
 float g_ns;
 float g_nt;
 float g_m_beta;
+float g_m_lamda;
 
 float g_e_sigma;         /* standard deviation of the Gaussian presmoothing  */
                          /*                                                  */
@@ -138,6 +140,39 @@ long g_position;         /* position in stream for reading input             */
 GLubyte *g_pixels;       /* pixel aray for Open-GL                           */
                          /****************************************************/
 
+
+
+/* ============================================= */
+
+void write_displacement_to_images
+(
+        /************************************************/
+        float **u,                                   /* in : u displacement                                   */
+        float **v,                                   /* in : v displacement */
+        int nx,                                      /* in : size in x-direction                     */
+        int ny,                                      /* in : size in y-direction                     */
+        int bx,                                      /* in : boundary in x-direction                 */
+        int by                                       /* in : boundary in y-direction                 */
+                                                     /************************************************/
+)
+{
+   float *imgU;
+   float *imgV;
+   imgU= new float[nx*ny];
+   imgV = new float[nx*ny];
+   // copy displacement to the images.
+   for(int i =bx; i<nx+bx; i++){
+      for(int j=by;j<ny+by; j++){
+         imgU[(j-by)*nx+(i-bx)] = u[i][j];
+         imgV[(j-by)*nx+(i-bx)] = v[i][j];
+      }
+   }
+   writeImageGray("disparity_u.png",ny,nx,imgU,"Disparity X direction");
+   writeImageGray("disparity_v.png",ny,nx,imgV,"Disparity V direction");
+   free(imgU);
+   free(imgV);
+
+}
 
 
 /*---------------------------------------------------------------------------*/
@@ -208,29 +243,29 @@ void drawGlutScene_from_image
 /*------------------------------------------------*/
 
 float* lf_extract_view(light_field_params data,  int view_t, int view_s){
-	size_t W,H,S,T,C;
-	W=data.W;
-	H=data.H;
-	T=data.T;
-	S=data.S;
-	C=data.C;
-	float* view = new float[W*H*C];
-   int center = floor((S-1)/2.0);
-   for(int j = 0; j<H; j++) {
-   	for(int i =0; i<W; i++) {
-     		for(int c=0; c<C; c++) {
-         	view[j*W*C+i*C+c]=data.lf[c*W*H*S*T + i*H*S*T + j*S*T + (center+view_s)*T + (center+view_t)];
-         }
-      }
-   }
-	return view;
+        size_t W,H,S,T,C;
+        W=data.W;
+        H=data.H;
+        T=data.T;
+        S=data.S;
+        C=data.C;
+        float* view = new float[W*H*C];
+        int center = floor((S-1)/2.0);
+        for(int j = 0; j<H; j++) {
+                for(int i =0; i<W; i++) {
+                        for(int c=0; c<C; c++) {
+                                view[j*W*C+i*C+c]=data.lf[c*W*H*S*T + i*H*S*T + j*S*T + (center+view_s)*T + (center+view_t)];
+                        }
+                }
+        }
+        return view;
 }
 
 float* lf_extract_view_gray(light_field_params lf, int view_t, int view_s){
-	float* view = lf_extract_view(lf,view_t,view_s);
-	float* view_gray = convertRGBtoGray(lf.W,lf.H,view);
-	free(view);
-	return view_gray;
+        float* view = lf_extract_view(lf,view_t,view_s);
+        float* view_gray = convertRGBtoGray(lf.W,lf.H,view);
+        free(view);
+        return view_gray;
 }
 
 
@@ -242,8 +277,10 @@ void print_constancy_type(){
                 printf("\n \t constancy: GRAY ");
         else if(g_m_type==TYPE_HESSIAN)
                 printf("\n \t constancy: HESSIAN ");
-        else
+        else if(g_m_type == TYPE_GRADIENT)
                 printf("\n \t constancy: GRADIENT ");
+        else
+               printf("\n \t constancy: GRAD + GRAY");
 }
 
 
@@ -296,6 +333,10 @@ void showParams()
         print_constancy_type();
         print_console_header("Visualisation Parameters");
 
+        if (g_active_param==10)
+                printf("\n (l) (lamda gradient constancy)               %4.6lf",g_m_lamda);
+        else
+                printf("\n (l)  lamda gradient contancy               %4.6lf",g_m_lamda);
         if (g_active_param==9)
                 printf("\n (b) (beta view smoothness)               %4.6lf",g_m_beta);
         else
@@ -392,7 +433,7 @@ void handleComputeDisplacements()
         printf("after set bounds\n");
         /* compute displacement vector field */
         HORN_SCHUNCK_MAIN(g_f1_s,g_f2_s,g_u,g_v,g_nx,g_ny,g_bx,g_by,
-                          g_hx, g_hy, g_m_type, g_ns,g_nt,g_m_beta, g_m_alpha, g_n_iter, g_n_omega,
+                          g_hx, g_hy, g_m_type, g_m_lamda, g_ns,g_nt,g_m_beta, g_m_alpha, g_n_iter, g_n_omega,
                           g_n_warp_eta, g_n_warp_levels);
         //HORN_SCHUNCK_VIEW(g_f1_s,g_f2_s,g_u,g_v,g_nx,g_ny,g_bx,g_by,
         //                   g_hx, g_hy,g_ns,g_nt,g_m_beta, g_m_alpha, g_n_iter);  //from horn_
@@ -441,6 +482,7 @@ void handleKeyboardspecial(int key, int x, int y)
                 print_console_line();
                 printf("\n\n F1     ........this help\n");
                 printf(" F2     ........write out displacement field in colour code \n");
+                printf(" F8     ........wirte to disparity_[u,v] current result\n");
                 printf(" F8     ........write out motion compensated 2nd frame \n");
                 printf(" ESC    ........program termination\n");
                 printf(" p      ........select presmoothing parameter\n");
@@ -486,6 +528,10 @@ void handleKeyboardspecial(int key, int x, int y)
                 write_pgm_blank_header("frame2_bw.pgm",g_nx,g_ny);
                 write_pgm_data("frame2_bw.pgm",g_f2_bw,g_nx,g_ny,g_bx,g_by);
                 break;
+        case GLUT_KEY_F6:
+                /* write out displacement by U and V seperately in to grayscale image */
+                write_displacement_to_images(g_u,g_v,g_nx,g_ny,g_bx,g_by);
+                break;
 
         case GLUT_KEY_DOWN:
                 /* decrease sigma */
@@ -508,6 +554,13 @@ void handleKeyboardspecial(int key, int x, int y)
                 {
                         g_m_beta/=sqrt(sqrt(sqrt(sqrt(10))));
                         if (g_m_beta<0.01) g_m_beta=0.01;
+                        if (g_direct_compute==1) handleComputeDisplacements(); break;
+                }
+               /* decrease lamda */
+                if (g_active_param==10)
+                {
+                        g_m_lamda/=sqrt(sqrt(sqrt(sqrt(10))));
+                        if (g_m_lamda<0.01) g_m_lamda=0.01;
                         if (g_direct_compute==1) handleComputeDisplacements(); break;
                 }
                 /* decrease number of iterations */
@@ -578,6 +631,12 @@ void handleKeyboardspecial(int key, int x, int y)
                 if (g_active_param==9)
                 {
                         g_m_beta*=sqrt(sqrt(sqrt(sqrt(10))));
+                        if (g_direct_compute==1) handleComputeDisplacements(); break;
+                }
+                /* increase beta */
+                if (g_active_param==10)
+                {
+                        g_m_lamda*=sqrt(sqrt(sqrt(sqrt(10))));
                         if (g_direct_compute==1) handleComputeDisplacements(); break;
                 }
                 /* increase number of iterations */
@@ -658,6 +717,8 @@ void handleKeyboard(unsigned char key, int x, int y)
                 g_active_param=7; break;
         case 'b':
                 g_active_param=9; break;
+        case 'l':
+                g_active_param=10; break;
         case 44: //,
                 if (g_direct_compute==1) {g_direct_compute=0; break; }
                 if (g_direct_compute==0) {g_direct_compute=1; break; }
@@ -697,158 +758,158 @@ void handleMouse(int button, int state, int cx, int cy)
 // h5outfile: hdf5 file to write out estimated flow.
 // h5dset: dataset inside hdf5 file for storing estimated flow.
 void calculate_flow_view_write_img(float* img1, float* img2, char* filename, char* h5outfile,char* h5dset){
-	 //copy view to image pair.
-    int dims[10];
+        //copy view to image pair.
+        int dims[10];
 
-    for(int j=0; j<g_ny; j++) {
-    	for(int i=0; i<g_nx; i++) {
-      	g_f1[i+g_bx][j+g_by]= img1[j*g_nx+i]*255;
-         g_f2[i+g_bx][j+g_by]= img2[j*g_nx+i]*255;
-      }
-    }
-	fprintf(stdout,"*************************************************\n");
-   fprintf(stdout, " Start to calculate displacement for %s \n", h5dset);
-	fprintf(stdout,"*************************************************\n");
+        for(int j=0; j<g_ny; j++) {
+                for(int i=0; i<g_nx; i++) {
+                        g_f1[i+g_bx][j+g_by]= img1[j*g_nx+i]*255;
+                        g_f2[i+g_bx][j+g_by]= img2[j*g_nx+i]*255;
+                }
+        }
+        fprintf(stdout,"*************************************************\n");
+        fprintf(stdout, " Start to calculate displacement for %s \n", h5dset);
+        fprintf(stdout,"*************************************************\n");
 
-   handleComputeDisplacements();
+        handleComputeDisplacements();
 
-	//printf("Finish calculate flowfield, write to image \n");
-	float* flow = convert_displacements_to_image(g_u,g_v,g_nx,g_ny,g_bx,g_by,(float)0.0,g_g_max_disp);
-   //printf("Finish convert to rgb %d %d %d %d \n", g_nx, g_ny, g_bx, g_by);
-	writeImageRGB(filename,g_nx,g_ny,flow,filename);
- 	free(flow);
+        //printf("Finish calculate flowfield, write to image \n");
+        float* flow = convert_displacements_to_image(g_u,g_v,g_nx,g_ny,g_bx,g_by,(float)0.0,g_g_max_disp);
+        //printf("Finish convert to rgb %d %d %d %d \n", g_nx, g_ny, g_bx, g_by);
+        writeImageRGB(filename,g_nx,g_ny,flow,filename);
+        free(flow);
 
-   //write to hdf5 output
-   dims[0] = 2; //u or v
-   dims[1] = g_nx; // width;
-   dims[2] = g_ny; //height;
-   //copy flow to buffer*
+        //write to hdf5 output
+        dims[0] = 2; //u or v
+        dims[1] = g_nx; // width;
+        dims[2] = g_ny; //height;
+        //copy flow to buffer*
 
-   for(int j=0; j<g_ny; j++) {
-   	for(int i=0; i<g_nx; i++) {
-      	uvbuffer[ i*g_ny + j ] = g_u[g_bx+i][g_by+j];
-         uvbuffer[ g_ny*g_nx + i*g_ny +j ]=g_v[g_bx+i][g_by+j];
-      }
-	}
+        for(int j=0; j<g_ny; j++) {
+                for(int i=0; i<g_nx; i++) {
+                        uvbuffer[ i*g_ny + j ] = g_u[g_bx+i][g_by+j];
+                        uvbuffer[ g_ny*g_nx + i*g_ny +j ]=g_v[g_bx+i][g_by+j];
+                }
+        }
 
-   hdf5_write_data_simple(h5outfile,h5dset,dims, 3, uvbuffer);
+        hdf5_write_data_simple(h5outfile,h5dset,dims, 3, uvbuffer);
 }
 
 
 /*-------------- FUll flow field estimation ------*/
 // Generate displacement for all posible views
 void full_flow_view_estimation(light_field_params data, char* out_file){
-	float normfactor;
-   // RGB image from three views;
-   char name1[256];
-   char name2[256];
-	int S,T,W,H,C;
-   // grayscale image from three view;
-   float * img_c;//view center in grayscale
-   float * img_x;//secondary view in grayscale
+        float normfactor;
+        // RGB image from three views;
+        char name1[256];
+        char name2[256];
+        int S,T,W,H,C;
+        // grayscale image from three view;
+        float * img_c; //view center in grayscale
+        float * img_x; //secondary view in grayscale
 
-	S = data.S;
-	T = data.T;
-	W = data.W;
-	H = data.H;
-	C = data.C;
+        S = data.S;
+        T = data.T;
+        W = data.W;
+        H = data.H;
+        C = data.C;
 
-   // the center view index.
-   int center = floor((S-1)/2.0);
-   int vpatch = center -1; //Ignore view at the border
+        // the center view index.
+        int center = floor((S-1)/2.0);
+        int vpatch = center -1; //Ignore view at the border
 
-   //prepare view center
-   img_c = lf_extract_view_gray(data,0,0);
-   writeImageGray("view_c.png",W,H,img_c,"Image center");
-	fprintf(stdout, " EXTRACT VIEW: view center to view_c.png\n");
-   // let do with other view
-   for(int vs=-vpatch; vs<=vpatch; vs++) {
-   	for(int vt=-vpatch; vt<=vpatch; vt++) {
-      	if(vs==0 && vt==0)
-         	continue;
-			//Calculate the directional terms.
-         normfactor = 1.0/sqrt(vs*vs+vt*vt);
-         g_ns = normfactor*vs;
-         g_nt = normfactor*vt;
+        //prepare view center
+        img_c = lf_extract_view_gray(data,0,0);
+        writeImageGray("view_c.png",W,H,img_c,"Image center");
+        fprintf(stdout, " EXTRACT VIEW: view center to view_c.png\n");
+        // let do with other view
+        for(int vs=-vpatch; vs<=vpatch; vs++) {
+                for(int vt=-vpatch; vt<=vpatch; vt++) {
+                        if(vs==0 && vt==0)
+                                continue;
+                        //Calculate the directional terms.
+                        normfactor = 1.0/sqrt(vs*vs+vt*vt);
+                        g_ns = normfactor*vs;
+                        g_nt = normfactor*vt;
 
-			img_x = lf_extract_view_gray(data,vt,vs);
-         sprintf(name1,"view_%d_%d.png",vt,vs);
-         sprintf(name2,"Image at view (T,S) (%d,%d)",vt,vs);
-         writeImageGray(name1,W,H,img_x,name2);
-			fprintf(stdout," EXTRACT VIEW: view (T,S)  %d,%d to %s \n",vt,vs,name1);
-         sprintf(name2,"/flow/v_%d_%d",vt,vs);
-         sprintf(name1,"flow_%d_%d.png",vt,vs);
-         calculate_flow_view_write_img(img_c,img_x,name1,out_file,name2);
-		}
-	}
-   free(img_x);
-   free(img_c);
+                        img_x = lf_extract_view_gray(data,vt,vs);
+                        sprintf(name1,"view_%d_%d.png",vt,vs);
+                        sprintf(name2,"Image at view (T,S) (%d,%d)",vt,vs);
+                        writeImageGray(name1,W,H,img_x,name2);
+                        fprintf(stdout," EXTRACT VIEW: view (T,S)  %d,%d to %s \n",vt,vs,name1);
+                        sprintf(name2,"/flow/v_%d_%d",vt,vs);
+                        sprintf(name1,"flow_%d_%d.png",vt,vs);
+                        calculate_flow_view_write_img(img_c,img_x,name1,out_file,name2);
+                }
+        }
+        free(img_x);
+        free(img_c);
 }
 
 
 
 void handle_function_manual(){
-	fprintf(stdout,"Handle Function in Manual mode\n");
-	full_flow_view_estimation(lf,out_h5_file);
+        fprintf(stdout,"Handle Function in Manual mode\n");
+        full_flow_view_estimation(lf,out_h5_file);
 }
 
 void handle_function_interactive( int* argc, char** argv){
-	float* view_c;
-	float* view_o;
-	int s;
-	int t;
-	int center;
+        float* view_c;
+        float* view_o;
+        int s;
+        int t;
+        int center;
 
 
-	fprintf(stdout,"Handle Functions in Interactive mode\n");
+        fprintf(stdout,"Handle Functions in Interactive mode\n");
 
-	view_c = lf_extract_view_gray(lf,0,0);
-	writeImageGray("view_c.png",lf.W,lf.H,view_c,"Image center");
-	fprintf(stdout,"Extracted view center to view_c.png\n");
+        view_c = lf_extract_view_gray(lf,0,0);
+        writeImageGray("view_c.png",lf.W,lf.H,view_c,"Image center");
+        fprintf(stdout,"Extracted view center to view_c.png\n");
 
-	s = app_param.view_s;
-	t = app_param.view_t;
-	center = floor((lf.S-1)/2.0);
+        s = app_param.view_s;
+        t = app_param.view_t;
+        center = floor((lf.S-1)/2.0);
 
-	if(abs(s)>center)
-		s = floor(center/2.0);
-	if(abs(t)>center)
-		t = floor(center/2.0);
+        if(abs(s)>center)
+                s = floor(center/2.0);
+        if(abs(t)>center)
+                t = floor(center/2.0);
 
-	view_o = lf_extract_view_gray(lf,t,s);//other view.
-   writeImageGray("view_o.png",lf.W,lf.H,view_o,"Image secondary view");
-	fprintf(stdout,"Extracted view %d,%d to view_o.png\n",t,s);
+        view_o = lf_extract_view_gray(lf,t,s); //other view.
+        writeImageGray("view_o.png",lf.W,lf.H,view_o,"Image secondary view");
+        fprintf(stdout,"Extracted view %d,%d to view_o.png\n",t,s);
 
-   for(int j=0; j<g_ny; j++) {
-   	for(int i=0; i<g_nx; i++) {
-      	g_f1[i+g_bx][j+g_by]= view_c[j*g_nx+i]*255;
-         g_f2[i+g_bx][j+g_by]= view_o[j*g_nx+i]*255;
-      }
-   }
-	float	normfactor = 1.0/sqrt(s*s+t*t);
-   g_ns = normfactor*s;
-   g_nt = normfactor*t;
+        for(int j=0; j<g_ny; j++) {
+                for(int i=0; i<g_nx; i++) {
+                        g_f1[i+g_bx][j+g_by]= view_c[j*g_nx+i]*255;
+                        g_f2[i+g_bx][j+g_by]= view_o[j*g_nx+i]*255;
+                }
+        }
+        float normfactor = 1.0/sqrt(s*s+t*t);
+        g_ns = normfactor*s;
+        g_nt = normfactor*t;
 
 // open OpenGL window */
-   glutInit(argc, argv);
-   glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
+        glutInit(argc, argv);
+        glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
 
-   glutInitWindowSize((int)round(2*g_nx*g_g_pixel_ratio),
+        glutInitWindowSize((int)round(2*g_nx*g_g_pixel_ratio),
                            (int)round(g_ny*g_g_pixel_ratio));
-   glutCreateWindow("CORRESPONDENCE PROBLEMS - VISUALISATION FRONTEND");
+        glutCreateWindow("CORRESPONDENCE PROBLEMS - VISUALISATION FRONTEND");
 
 // register handle routines
-   glutDisplayFunc(handleDraw);
-   glutIdleFunc(handleComputeNothing);
-   glutKeyboardFunc(handleKeyboard);
-   glutSpecialFunc(handleKeyboardspecial);
-   glutMouseFunc(handleMouse);
+        glutDisplayFunc(handleDraw);
+        glutIdleFunc(handleComputeNothing);
+        glutKeyboardFunc(handleKeyboard);
+        glutSpecialFunc(handleKeyboardspecial);
+        glutMouseFunc(handleMouse);
 //
 // main
-   handleComputeDisplacements();
-   handleDraw();
-   showParams();
-   glutMainLoop();
+        handleComputeDisplacements();
+        handleDraw();
+        showParams();
+        glutMainLoop();
 }
 
 
@@ -856,103 +917,107 @@ void handle_function_interactive( int* argc, char** argv){
 
 void lf_load_configuration(char* config_file){
 
-	//At first, we should load the default configuration.
-	hs_param.g_pixel_ratio = 1;
-	hs_param.g_max_disp = 2.0;
-	hs_param.h_sigma = 1.2;
-	hs_param.h_alpha = 100;
-	hs_param.h_beta = 100;
-	hs_param.g_type = 0;
-	hs_param.h_omega = 1.95;
-	hs_param.h_warp_levels = 6;
-	hs_param.h_iter = 200;
-	hs_param.h_warp_eta = 0.5;
+        //At first, we should load the default configuration.
+        hs_param.g_pixel_ratio = 1;
+        hs_param.g_max_disp = 2.0;
+        hs_param.h_sigma = 1.2;
+        hs_param.h_alpha = 100;
+        hs_param.h_beta = 100;
+        hs_param.h_lamda = 10;
+        hs_param.g_type = 0;
+        hs_param.h_omega = 1.95;
+        hs_param.h_warp_levels = 6;
+        hs_param.h_iter = 200;
+        hs_param.h_warp_eta = 0.5;
 
 
-	// start to read from config file.
-	if(strlen(config_file)!=0){
-		fprintf(stdout,"Reading configuration file %s \n",config_file);
- 		std::ifstream file(config_file);
-   	std::string str;
-		std::string params;
-		std::size_t pos;
-		std::string  values;
-   	while (std::getline(file, str))
-   	{
-			fprintf(stdout,"line: %s \n",str.c_str());
-		   trim(str);
-			if(str.empty())
-				continue;
-			params = str.substr(0,1);
-			if(params.compare("#")==0)
-				continue;
-			pos = str.find("#");
-			if(pos != std::string::npos)
-				str = str.substr(0,pos);
-			pos = str.find(";");
-			if(pos != std::string::npos)
-				str = str.substr(0,pos);
-			if(str.empty())
-				continue;
-			pos = str.find("=");
-			if(pos == std::string::npos)
-				continue;
-			params = str.substr(0,pos);
-			trim(params);
-			values = str.substr(pos+1,str.length()-(pos+1));
-			trim(values);
-			fprintf(stdout,"Got param %s values %s \n",params.c_str(), values.c_str());
-	//read parameter for variation flow algorithm.
-			if(params.compare("g_pixel_ratio")==0)
-				hs_param.g_pixel_ratio = atoi(values.c_str());
-			if(params.compare("g_max_disp")==0)
-				hs_param.g_max_disp = atof(values.c_str());
-			if(params.compare("h_sigma")==0)
-				hs_param.h_sigma = atof(values.c_str());
-			if(params.compare("h_alpha")==0)
-				hs_param.h_alpha = atof(values.c_str());
-			if(params.compare("h_beta")==0)
-				hs_param.h_beta = atof(values.c_str());
-			if(params.compare("g_type")==0)
-				hs_param.g_type = atoi(values.c_str());
-			if(params.compare("h_omega")==0)
-				hs_param.h_omega = atof(values.c_str());
- 			if(params.compare("h_warp_levels")==0)
-				hs_param.h_warp_levels = atof(values.c_str());
-			if(params.compare("h_warp_eta")==0)
-				hs_param.h_warp_eta = atof(values.c_str());
-			if(params.compare("h_iter")==0)
-				hs_param.h_iter = atoi(values.c_str());
+        // start to read from config file.
+        if(strlen(config_file)!=0) {
+                fprintf(stdout,"Reading configuration file %s \n",config_file);
+                std::ifstream file(config_file);
+                std::string str;
+                std::string params;
+                std::size_t pos;
+                std::string values;
+                while (std::getline(file, str))
+                {
+                        fprintf(stdout,"line: %s \n",str.c_str());
+                        trim(str);
+                        if(str.empty())
+                                continue;
+                        params = str.substr(0,1);
+                        if(params.compare("#")==0)
+                                continue;
+                        pos = str.find("#");
+                        if(pos != std::string::npos)
+                                str = str.substr(0,pos);
+                        pos = str.find(";");
+                        if(pos != std::string::npos)
+                                str = str.substr(0,pos);
+                        if(str.empty())
+                                continue;
+                        pos = str.find("=");
+                        if(pos == std::string::npos)
+                                continue;
+                        params = str.substr(0,pos);
+                        trim(params);
+                        values = str.substr(pos+1,str.length()-(pos+1));
+                        trim(values);
+                        fprintf(stdout,"Got param %s values %s \n",params.c_str(), values.c_str());
+                        //read parameter for variation flow algorithm.
+                        if(params.compare("g_pixel_ratio")==0)
+                                hs_param.g_pixel_ratio = atoi(values.c_str());
+                        if(params.compare("g_max_disp")==0)
+                                hs_param.g_max_disp = atof(values.c_str());
+                        if(params.compare("h_sigma")==0)
+                                hs_param.h_sigma = atof(values.c_str());
+                        if(params.compare("h_alpha")==0)
+                                hs_param.h_alpha = atof(values.c_str());
+                        if(params.compare("h_lamda")==0)
+                                hs_param.h_lamda = atof(values.c_str());
+                        if(params.compare("h_beta")==0)
+                                hs_param.h_beta = atof(values.c_str());
+                        if(params.compare("g_type")==0)
+                                hs_param.g_type = atoi(values.c_str());
+                        if(params.compare("h_omega")==0)
+                                hs_param.h_omega = atof(values.c_str());
+                        if(params.compare("h_warp_levels")==0)
+                                hs_param.h_warp_levels = atof(values.c_str());
+                        if(params.compare("h_warp_eta")==0)
+                                hs_param.h_warp_eta = atof(values.c_str());
+                        if(params.compare("h_iter")==0)
+                                hs_param.h_iter = atoi(values.c_str());
 
-	// Applicaton level params.
-			if(params.compare("view_t")==0)
-				app_param.view_t = atoi(values.c_str());
- 			if(params.compare("view_s")==0)
-				app_param.view_s = atoi(values.c_str());
-			if(params.compare("view_all")==0)
-				app_param.view_all = atoi(values.c_str());
-			if(params.compare("p_mode")==0)
-				app_param.mode = atoi(values.c_str());
- 			if(params.compare("png_out")==0)
-				app_param.png_out = atoi(values.c_str());
-   	}
-	}
+                        // Applicaton level params.
+                        if(params.compare("view_t")==0)
+                                app_param.view_t = atoi(values.c_str());
+                        if(params.compare("view_s")==0)
+                                app_param.view_s = atoi(values.c_str());
+                        if(params.compare("view_all")==0)
+                                app_param.view_all = atoi(values.c_str());
+                        if(params.compare("p_mode")==0)
+                                app_param.mode = atoi(values.c_str());
+                        if(params.compare("png_out")==0)
+                                app_param.png_out = atoi(values.c_str());
+                }
+        }
 
-	//transfer configuration to original variables.
-   g_g_pixel_ratio = hs_param.g_pixel_ratio;
-   g_g_max_disp=hs_param.g_max_disp;
-   g_direct_compute=0;
-   g_e_sigma=hs_param.h_sigma;
-   g_m_alpha=hs_param.h_alpha;
-   g_m_beta = hs_param.h_beta;
-   g_m_type=hs_param.g_type;
-   g_active_param=1000;
-   g_u_ref=NULL;
-   g_v_ref=NULL;
-   g_n_omega=hs_param.h_omega;
-   g_n_warp_levels=hs_param.h_warp_levels;
-   g_n_warp_eta=hs_param.h_warp_eta;
-   g_n_iter = hs_param.h_iter; // number of iteration
+        //transfer configuration to original variables.
+        g_g_pixel_ratio = hs_param.g_pixel_ratio;
+        g_g_max_disp=hs_param.g_max_disp;
+        g_direct_compute=0;
+        g_e_sigma=hs_param.h_sigma;
+        g_m_alpha=hs_param.h_alpha;
+        g_m_beta = hs_param.h_beta;
+        g_m_lamda = hs_param.h_lamda;
+        g_m_type=hs_param.g_type;
+        g_active_param=1000;
+        g_u_ref=NULL;
+        g_v_ref=NULL;
+        g_n_omega=hs_param.h_omega;
+        g_n_warp_levels=hs_param.h_warp_levels;
+        g_n_warp_eta=hs_param.h_warp_eta;
+        g_n_iter = hs_param.h_iter; // number of iteration
 
 }
 
@@ -968,14 +1033,14 @@ void print_usage(){
 
 
 int main (int argc, char* argv[]){
-   char option;
-	int mode_arg; // mode from command line arg;
-	//set initial params.
-	strcpy(in_h5_file,"");
-	strcpy(dataset,"");
-	mode_arg=-1;
-	strcpy(out_h5_file,"");
-	strcpy(config_file,"");
+        char option;
+        int mode_arg; // mode from command line arg;
+        //set initial params.
+        strcpy(in_h5_file,"");
+        strcpy(dataset,"");
+        mode_arg=-1;
+        strcpy(out_h5_file,"");
+        strcpy(config_file,"");
         while ((option = getopt(argc, argv,"i:c:ho:m:d:")) != -1) {
                 switch (option) {
                 case 'h':
@@ -1003,45 +1068,45 @@ int main (int argc, char* argv[]){
                 }
         }
 
-	//verify parameters.
-	//input hdf5file.
-	if(strlen(in_h5_file)==0){
-		fprintf(stdout," Please provide input h5 file\n");
-		print_usage();
-		exit(0);
-	}
+        //verify parameters.
+        //input hdf5file.
+        if(strlen(in_h5_file)==0) {
+                fprintf(stdout," Please provide input h5 file\n");
+                print_usage();
+                exit(0);
+        }
 
-	//check dataset name.
-	if(strlen(dataset) == 0){
-		fprintf(stdout," Please provide dataset name\n");
-		print_usage();
-		exit(0);
-	}
-	fprintf(stdout," Working with H5 file %s and dataset %s \n",in_h5_file, dataset);
+        //check dataset name.
+        if(strlen(dataset) == 0) {
+                fprintf(stdout," Please provide dataset name\n");
+                print_usage();
+                exit(0);
+        }
+        fprintf(stdout," Working with H5 file %s and dataset %s \n",in_h5_file, dataset);
 
-	//check ouptut file
-	if(strlen(out_h5_file)==0){
-		strcpy(out_h5_file,"output.h5");
-	}
-	fprintf(stdout," Output file is %s \n",out_h5_file);
+        //check ouptut file
+        if(strlen(out_h5_file)==0) {
+                strcpy(out_h5_file,"output.h5");
+        }
+        fprintf(stdout," Output file is %s \n",out_h5_file);
 
 
-	//read configuration file
-	lf_load_configuration(config_file);
+        //read configuration file
+        lf_load_configuration(config_file);
 
-	if(mode_arg!=-1)
-		app_param.mode=mode_arg;
-	if(app_param.mode == MODE_MANUAL)
-		fprintf(stdout," Working mode is set to  manual");
-	else{
-		app_param.mode = MODE_INTERACTIVE;
-		fprintf(stdout," Working mode is set to interactive");
-	}
-	//Check input HDF5 file.
-   fprintf(stdout," Loading HDF5 file: %s\n",in_h5_file);
-   fprintf(stdout," Reading LF from dataset %s\n",dataset);
-   lf.lf = hdf5_read_lf(in_h5_file,dataset,lf.W,lf.H,lf.S,lf.T,lf.C);
-   fprintf(stdout," .... LF dimension: %dx%dx%dx%dx%d\n",lf.W,lf.H,lf.S,lf.T,lf.C);
+        if(mode_arg!=-1)
+                app_param.mode=mode_arg;
+        if(app_param.mode == MODE_MANUAL)
+                fprintf(stdout," Working mode is set to  manual");
+        else{
+                app_param.mode = MODE_INTERACTIVE;
+                fprintf(stdout," Working mode is set to interactive");
+        }
+        //Check input HDF5 file.
+        fprintf(stdout," Loading HDF5 file: %s\n",in_h5_file);
+        fprintf(stdout," Reading LF from dataset %s\n",dataset);
+        lf.lf = hdf5_read_lf(in_h5_file,dataset,lf.W,lf.H,lf.S,lf.T,lf.C);
+        fprintf(stdout," .... LF dimension: %dx%dx%dx%dx%d\n",lf.W,lf.H,lf.S,lf.T,lf.C);
 
 /* ---------- set boundary and grid size ----------------------------------- */
 
@@ -1052,32 +1117,32 @@ int main (int argc, char* argv[]){
         g_hy=1;
 
 
-	//setup image size for algorithms.
-   g_nx=lf.W;
-   g_ny=lf.H;
+        //setup image size for algorithms.
+        g_nx=lf.W;
+        g_ny=lf.H;
 
-   /* ---------- memory allocation ------------------------------------ */
+        /* ---------- memory allocation ------------------------------------ */
 
-   ALLOC_MATRIX(2, g_nx+2*g_bx, g_ny+2*g_by, &g_f1,   &g_f2);
-   ALLOC_MATRIX(2, g_nx+2*g_bx, g_ny+2*g_by, &g_f1_s, &g_f2_s);
-   ALLOC_MATRIX(1, g_nx+2*g_bx, g_ny+2*g_by, &g_f2_bw);
-   ALLOC_MATRIX(2, g_nx+2*g_bx, g_ny+2*g_by, &g_u,    &g_v);
-   ALLOC_CUBIX(1, 2*g_nx+2*g_bx, g_ny+2*g_by, 3, &g_p6);
-   ALLOC_CUBIX(1, g_nx+2*g_bx, g_ny+2*g_by, 3, &g_disp);
+        ALLOC_MATRIX(2, g_nx+2*g_bx, g_ny+2*g_by, &g_f1,   &g_f2);
+        ALLOC_MATRIX(2, g_nx+2*g_bx, g_ny+2*g_by, &g_f1_s, &g_f2_s);
+        ALLOC_MATRIX(1, g_nx+2*g_bx, g_ny+2*g_by, &g_f2_bw);
+        ALLOC_MATRIX(2, g_nx+2*g_bx, g_ny+2*g_by, &g_u,    &g_v);
+        ALLOC_CUBIX(1, 2*g_nx+2*g_bx, g_ny+2*g_by, 3, &g_p6);
+        ALLOC_CUBIX(1, g_nx+2*g_bx, g_ny+2*g_by, 3, &g_disp);
 
-   uvbuffer = new float[g_nx*g_ny*2];
-   g_pixels = new GLubyte[2*(g_nx+1)*g_ny*3*sizeof(GLubyte)];
+        uvbuffer = new float[g_nx*g_ny*2];
+        g_pixels = new GLubyte[2*(g_nx+1)*g_ny*3*sizeof(GLubyte)];
 
-	/*------ Extract view ------ */
-
-
-	// the center view index.
+        /*------ Extract view ------ */
 
 
-	if(app_param.mode == MODE_MANUAL)
-		handle_function_manual();
-	else
-		handle_function_interactive(&argc,argv);
+        // the center view index.
+
+
+        if(app_param.mode == MODE_MANUAL)
+                handle_function_manual();
+        else
+                handle_function_interactive(&argc,argv);
 
 
 
@@ -1153,6 +1218,7 @@ int main0 (int argc, char* argv[])
         g_e_sigma=1.2;
         g_m_alpha=100;
         g_m_beta = 100;
+        g_m_lamda = 100;
         g_m_type=0;
         g_active_param=1000;
         g_u_ref=NULL;

@@ -24,23 +24,42 @@ endif
 
 RM = rm -f
 
+OUTPUT_EXTRACT_VIEW = lf_extract_view
+OUTPUT_CORRES = lf_depth_v2
+OUTPUT = $(OUTPUT_CORRES)
 
-OUTPUT = frontend
+SRCS_COMMON = hdf5_lib/hdf5_tools.c png_lib/libPNG.c
+OBJS_COMMON = $(subst .c,.o,$(notdir $(SRCS_COMMON)))
 
-SRCS = hdf5_lib/hdf5_tools.c png_lib/libPNG.c lf_depth_v2.c
-OBJS  = $(subst .c,.o,$(notdir $(SRCS)))
+SRCS_CORRES = lf_depth_v2.c
+OBJS_CORRES  = $(subst .c,.o,$(notdir $(SRCS_CORRES)))
+
+SRCS_EXTRACT_VIEW = lf_extract_view.c
+OBJS_EXTRACT_VIEW = $(subst .c,.o,$(notdir $(SRCS_EXTRACT_VIEW)))
+
+
 #$(notdir $(FILE))
 .PHONY: all clean
 
 all: $(OUTPUT)
 
-$(OUTPUT): $(OBJS)
-	$(CC) $(NORMAL_CFLAGS) $(HDF5FLAG) -o $(OUTPUT) $(OBJS) $(HDF5LIBS) $(PNGLIBS) $(OGL_LIBS)
+$(OUTPUT_CORRES): $(OBJS_COMMON) $(OBJS_CORRES)
+	$(CC) $(NORMAL_CFLAGS) $(HDF5FLAG) -o $(OUTPUT_CORRES) $(OBJS_COMMON) $(OBJS_CORRES) $(HDF5LIBS) $(PNGLIBS) $(OGL_LIBS)
 
-$(OBJS): $(SRCS)
-	$(CC) $(NORMAL_CFLAGS) $(HDF5FLAG) -c $(SRCS) $(HDF5LIBS) $(PNGLIBS)
+$(OBJS_COMMON): $(SRCS_COMMON)
+	$(CC) $(NORMAL_CFLAGS) $(HDF5FLAG) -c $(SRCS_COMMON) $(HDF5LIBS) $(PNGLIBS)
+
+$(OBJS_CORRES): $(SRCS_CORRES)
+	$(CC) $(NORMAL_CFLAGS) $(HDF5FLAG) -c $(SRCS_CORRES) $(HDF5LIBS) $(PNGLIBS)
+
+
+$(OUTPUT_EXTRACT_VIEW): $(OBJS_COMMON) $(OBJS_EXTRACT_VIEW)
+	$(CC) $(NORMAL_CFLAGS) $(HDF5FLAG) -o $(OUTPUT_EXTRACT_VIEW) $(OBJS_EXTRACT_VIEW) $(OBJS_COMMON) $(HDF5LIBS) $(PNGLIBS)
+
+$(OBJS_EXTRACT_VIEW): $(SRCS_EXTRACT_VIEW)
+	$(CC) $(NORMAL_CFLAGS) $(HDF5FLAG) -c $(SRCS_EXTRACT_VIEW) $(HDF5LIBS) $(PNGLIBS)
 
 clean:
-	$(RM) $(OBJS)
+	$(RM) $(OBJS) $(OBJS_EXTRACT_VIEW)
 	$(RM) *.a
 	$(RM) $(OUTPUT)

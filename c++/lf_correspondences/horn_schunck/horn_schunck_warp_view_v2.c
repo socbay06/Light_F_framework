@@ -18,8 +18,8 @@
 
 #define TYPE_GRADIENT 0
 #define TYPE_GRAY 1
-#define TYPE_HESSIAN 2
-
+#define TYPE_HESSIAN 10
+#define TYPE_GRAY_GRADIENT 2
 /* ------------------------------------------------------------------------- */
 
 void backward_registration
@@ -251,6 +251,7 @@ void compute_motion_tensor
         float hx,       /* in     : grid spacing in x-direction              */
         float hy,       /* in     : grid spacing in y-direction              */
         int type,       /* in     : which constancy assumption applied       */
+        float lamda,    /* in     : weight for gradient contancy in mix mode */
         float **J_11,   /* out    : entry 11 of the motion tensor            */
         float **J_22,   /* out    : entry 22 of the motion tensor            */
         float **J_33,   /* out    : entry 33 of the motion tensor            */
@@ -340,8 +341,7 @@ void compute_motion_tensor
                            J_13[i][j] = fx[i][j] * ft[i][j];
                            J_23[i][j] = fy[i][j] * ft[i][j];
 
-                       }else{
-
+                       }else if(type == TYPE_GRADIENT){
                        /* Gradient constancy */
                        J_11[i][j] = fxx[i][j] * fxx[i][j] + fxy[i][j] * fxy[i][j];
                        J_22[i][j] = fxy[i][j] * fxy[i][j] + fyy[i][j] * fyy[i][j];
@@ -349,7 +349,15 @@ void compute_motion_tensor
                        J_12[i][j] = fxx[i][j] * fxy[i][j] + fxy[i][j] * fyy[i][j];
                        J_13[i][j] = fxx[i][j] * fxt[i][j] + fxy[i][j] * fyt[i][j];
                        J_23[i][j] = fxy[i][j] * fxt[i][j] + fyy[i][j] * fyt[i][j];
-                     }
+                    }else if(type == TYPE_GRAY_GRADIENT){
+                      /* Gray + lamda* gradient constancy */
+                       J_11[i][j] = fx[i][j] * fx[i][j] + lamda*(fxx[i][j] * fxx[i][j] + fxy[i][j] * fxy[i][j]);
+                       J_22[i][j] = fy[i][j] * fy[i][j] + lamda*(fxy[i][j] * fxy[i][j] + fyy[i][j] * fyy[i][j]);
+                       J_33[i][j] = ft[i][j] * ft[i][j] + lamda*(fxt[i][j] * fxt[i][j] + fyt[i][j] * fyt[i][j]);
+                       J_12[i][j] = fx[i][j] * fy[i][j] + lamda*(fxx[i][j] * fxy[i][j] + fxy[i][j] * fyy[i][j]);
+                       J_13[i][j] = fx[i][j] * ft[i][j] + lamda*(fxx[i][j] * fxt[i][j] + fxy[i][j] * fyt[i][j]);
+                       J_23[i][j] = fy[i][j] * ft[i][j] + lamda*(fxy[i][j] * fxt[i][j] + fyy[i][j] * fyt[i][j]);
+                    }
                 }
 
 /* free memory */
@@ -385,6 +393,7 @@ void HORN_SCHUNCK_WARP_LEVEL_VIEW
         float nt,                /* in     : norminated view direction y coordinates             */
         float m_beta,             /* in     : smoothness weight for direction */
         int type,       /* in     : type of constancy assumption             */
+        float m_lamda,  /* in     : weight for gradient contantcy mix mode */
         float m_alpha,  /* in     : smoothness weight                        */
         int n_iter,     /* in     : number of iterations                     */
         float n_omega   /* in     : SOR overrelaxation parameter             */
@@ -420,7 +429,7 @@ void HORN_SCHUNCK_WARP_LEVEL_VIEW
 
 
 /* ---- compute motion tensor ---- */
-        compute_motion_tensor(f1, f2, nx, ny, bx, by, hx, hy,type,
+        compute_motion_tensor(f1, f2, nx, ny, bx, by, hx, hy,type,m_lamda,
                               J_11, J_22, J_33, J_12, J_13, J_23);
 
 
@@ -457,6 +466,7 @@ void HORN_SCHUNCK_WARP_VIEW
         int nx_orig,    /* in     : size in x-direction (original resolution)*/
         int ny_orig,    /* in     : size in y-direction (original resoluiton)*/
         int type,       /* in     : type of constancy assumption             */
+        float m_lamda,  /* in      : weight for gradient contancy          */
         float **f1_res, /* in+out : 1st image, resampled                     */
         float **f2_res, /* in+out : 2nd image, resampled                     */
         float **f2_res_warp, /* in+out : 2nd image, resampled  and warped         */
@@ -503,7 +513,7 @@ void HORN_SCHUNCK_WARP_VIEW
 /* start at coarsest level by recursively calling the routine */
         if (rec_depth < max_rec_depth)
         {
-                HORN_SCHUNCK_WARP_VIEW(f1_orig, f2_orig, nx_orig, ny_orig, type,
+                HORN_SCHUNCK_WARP_VIEW(f1_orig, f2_orig, nx_orig, ny_orig, type,m_lamda,
                                   f1_res, f2_res, f2_res_warp,
                                   du, dv, u, v, tmp,
                                   nx_coarse, ny_coarse, bx, by, hx_coarse, hy_coarse,
@@ -549,7 +559,7 @@ void HORN_SCHUNCK_WARP_VIEW
 
 /* solve difference problem at current resolution to obtain increment */
         HORN_SCHUNCK_WARP_LEVEL_VIEW(f1_res, f2_res_warp, du, dv, u, v,
-                                nx_fine, ny_fine, bx, by, hx_fine, hy_fine,ns,nt,m_beta,type,
+                                nx_fine, ny_fine, bx, by, hx_fine, hy_fine,ns,nt,m_beta,type,m_lamda,
                                 m_alpha, n_iter, n_omega);
 
 
@@ -580,6 +590,7 @@ void HORN_SCHUNCK_MAIN
         float hx,       /* in     : grid spacing in x-direction              */
         float hy,       /* in     : grid spacing in y-direction              */
         int type,       /* in     : type of constancy assumption             */
+        float m_lamda,  /* in     : weight for graident contancy in mix mode */
         float ns,                /* in     : norminated view direction x coordinates             */
         float nt,                /* in     : norminated view direction y coordinates             */
         float m_beta,             /* in     : smoothness weight for direction */
@@ -627,7 +638,7 @@ void HORN_SCHUNCK_MAIN
 
 
 /* call Horn/Schunck warping routine with desired number of levels */
-        HORN_SCHUNCK_WARP_VIEW(f1, f2, nx, ny,type,
+        HORN_SCHUNCK_WARP_VIEW(f1, f2, nx, ny,type,m_lamda,
                           f1_res, f2_res, f2_res_warp,
                           du, dv, u, v, tmp,
                           nx, ny, bx, by, hx, hy,
