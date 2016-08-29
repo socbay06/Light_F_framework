@@ -1,7 +1,7 @@
 %% MAIN
 LFMatlabPathSetup
 FPCUtilProcessWhiteImage2
-SliceXYImageDraft
+SliceXYImage
 
 %% OPTION: for testing purpose
 %figure; imshow(IMGCheck,[])
