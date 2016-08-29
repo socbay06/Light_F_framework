@@ -1,1 +1,0 @@
-%LFAF_extract single view
