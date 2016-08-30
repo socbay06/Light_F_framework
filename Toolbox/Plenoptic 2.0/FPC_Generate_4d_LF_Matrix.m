@@ -1,7 +1,7 @@
 %% MAIN
 LFMatlabPathSetup
-FPCUtilProcessWhiteImage2
+FPCUtilProcessWhiteImage
 SliceXYImage
 
 %% OPTION: for testing purpose
-%figure; imshow(IMGCheck,[])
+figure; imshow(IMGCheck,[])

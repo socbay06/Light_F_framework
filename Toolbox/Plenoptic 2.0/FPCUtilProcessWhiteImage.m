@@ -31,7 +31,7 @@ GridModelOptions = LFDefaultField( 'GridModelOptions', 'CropAmt', 25 );
 GridModelOptions = LFDefaultField( 'GridModelOptions', 'SkipStep', 1 );
 
 %% Display Hotpixel on the WhiteImage
-DebugDisplay=true;
+DebugDisplay=false;
 
 %% Build Hot Pixel Grid Coordinates
 [LensletGridModel, GridCoords] = LFBuildLensletGridModel( WhiteImg, GridModelOptions, DebugDisplay );

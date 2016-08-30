@@ -27,4 +27,4 @@ end
 IMGCheck=squeeze(LF(12,12,:,:,1));
 %imagesc(IMGCheck)
 %IMGCheck=RawImg(GridCoords(vv,uu,2)+(-halfSTSize:halfSTSize),GridCoords(vv,uu,1)+(-halfSTSize:halfSTSize));
-figure; imshow(IMGCheck,[])
+
