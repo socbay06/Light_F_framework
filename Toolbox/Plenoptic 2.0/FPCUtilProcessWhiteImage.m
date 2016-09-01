@@ -1,6 +1,3 @@
-%% Usage:
-%     [LensletGridModel, GridCoords] = LFBuildLensletGridModel( WhiteImg, GridModelOptions, DebugDisplay )
-%
 %% Inputs: 
 %             WhiteImg : path of an image taken through a diffuser, or of an entirely white scene
 % 
