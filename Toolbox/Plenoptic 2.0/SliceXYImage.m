@@ -1,30 +1,27 @@
-load('D:\Thesis_ light field_D\LFP examples\Raytrix\Demo_01_Raw.mat');
-RawImg=Demo_01_Raw;
+function LF= SliceXYImage(RawImageFullPath, LensletGridModel, GridCoords)
+RawImg=imread(RawImageFullPath);
+%Demo_01_Raw;
 
 % SliceXYImage( LensletGridModel, LensletImage, WhiteImage, DecodeOptions )
-USize = LensletGridModel.UMax;
-VSize = LensletGridModel.VMax;
+XSize = LensletGridModel.UMax;
+YSize = LensletGridModel.VMax;
 MaxSpacing = (max(LensletGridModel.HSpacing, LensletGridModel.VSpacing));  % Enforce square output in s,t
-SSize = round(MaxSpacing) ; % force odd for centered middle pixel -- H,VSpacing are even, so +1 is odd
-TSize = round(MaxSpacing) ;
+USize = round(MaxSpacing) ; % force odd for centered middle pixel -- H,VSpacing are even, so +1 is odd
+VSize = round(MaxSpacing) ;
 halfSTSize=floor(MaxSpacing/2);
-LF = zeros(TSize, SSize, VSize, USize,3);
+LF = zeros(VSize, USize, YSize, XSize,3);
 GridCoords=round(GridCoords);
 
-for vv=1:VSize      %1:123
-    for uu=1:USize  %1:174
-        if ((uu*LensletGridModel.HSpacing<MaxSpacing) ||(vv*LensletGridModel.HSpacing<MaxSpacing)||...
-              (uu*LensletGridModel.HSpacing==MaxSpacing) ||(vv*LensletGridModel.HSpacing==MaxSpacing)||...
-              (size(RawImg,1)-vv*LensletGridModel.HSpacing<2)||...
-              (size(RawImg,2)-uu*LensletGridModel.HSpacing<MaxSpacing))
+for yy=1:YSize      %1:131
+    for xx=1:XSize  %1:172
+        if ((xx*LensletGridModel.HSpacing<MaxSpacing) ||(yy*LensletGridModel.HSpacing<MaxSpacing)||...
+            (xx*LensletGridModel.HSpacing==MaxSpacing) ||(yy*LensletGridModel.HSpacing==MaxSpacing)||...
+            (size(RawImg,1)-yy*LensletGridModel.VSpacing<2)||...
+            (size(RawImg,2)-xx*LensletGridModel.HSpacing<2) )
             continue
         end
         %else cut sub-image
-        LF(:,:,vv,uu,1)=RawImg(GridCoords(vv,uu,2)+(-halfSTSize:halfSTSize),GridCoords(vv,uu,1)+(-halfSTSize:halfSTSize));
+        LF(:,:,yy,xx,1)=RawImg(GridCoords(yy,xx,2)+(-halfSTSize:halfSTSize),GridCoords(yy,xx,1)+(-halfSTSize:halfSTSize));
     end
 end
-
-IMGCheck=squeeze(LF(12,12,:,:,1));
-%imagesc(IMGCheck)
-%IMGCheck=RawImg(GridCoords(vv,uu,2)+(-halfSTSize:halfSTSize),GridCoords(vv,uu,1)+(-halfSTSize:halfSTSize));
-
+end

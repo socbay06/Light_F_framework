@@ -15,13 +15,13 @@
 %           [optional] .Precision : 'single' or 'double'
 % 
 %  [optional] DebugDisplay : enables a debugging display, default false
+function [LensletGridModel, GridCoords]=FPCUtilProcessWhiteImage(WhiteImageFullPath)
 
 %% Load White image-----------------------------------------------------------------------------
-load('D:\Thesis_ light field_D\LFP examples\Raytrix\Demo_01_RawWhite.mat');
-WhiteImg=Demo_01_RawWhite;
+WhiteImg=imread(WhiteImageFullPath);
 
 %% initialize GridModelOption
-GridModelOptions.ApproxLensletSpacing =23.016 ;
+GridModelOptions.ApproxLensletSpacing =23.316 ;
 GridModelOptions = LFDefaultField( 'GridModelOptions', 'Orientation', 'horz' );
 GridModelOptions = LFDefaultField( 'GridModelOptions', 'FilterDiskRadiusMult', 1/3 );
 GridModelOptions = LFDefaultField( 'GridModelOptions', 'CropAmt', 25 );
@@ -32,3 +32,4 @@ DebugDisplay=false;
 
 %% Build Hot Pixel Grid Coordinates
 [LensletGridModel, GridCoords] = LFBuildLensletGridModel( WhiteImg, GridModelOptions, DebugDisplay );
+end
